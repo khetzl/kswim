@@ -1,12 +1,15 @@
 use crate::peer::Peer;
-//use crate::ping::PingResult;
 use crate::registry::Registry;
 
 //use std::error::Error;
+use std::error::Error;
 use std::hash::Hash;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+
+type HandlerResult = Result<(), Box<dyn Error + Send>>;
 
 #[derive(Debug)]
 enum HandlerMsg<I, M>
@@ -14,8 +17,14 @@ where
     I: Hash + Eq + std::fmt::Debug,
     M: Peer + std::fmt::Debug,
 {
-    Add { id: I, member: M },
-    Remove { id: I },
+    Add {
+        reply_channel: oneshot::Sender<HandlerResult>,
+        id: I,
+        member: M,
+    },
+    Remove {
+        id: I,
+    },
     PeriodicCheck,
 }
 
@@ -60,13 +69,19 @@ where
     }
 
     pub async fn add(&self, id: I, member: M) {
+        let (reply_sender, mut rx) = oneshot::channel::<HandlerResult>();
         self.handler_sender
             .send(HandlerMsg::Add {
+                reply_channel: reply_sender,
                 id: id,
                 member: member,
             })
             .await
             .unwrap();
+        match rx.await {
+            Ok(v) => println!("got = {:?}", v),
+            Err(_) => println!("the sender dropped"),
+        }
     }
 
     pub async fn remove(&self, id: I) {
@@ -97,7 +112,15 @@ where
         if let Some(msg) = rx.recv().await {
             match msg {
                 HandlerMsg::PeriodicCheck => registry.perform_periodic_check(),
-                HandlerMsg::Add { id, member } => registry.add(id, member),
+                HandlerMsg::Add {
+                    reply_channel,
+                    id,
+                    member,
+                } => {
+                    registry.add(id, member);
+                    let reply = reply_channel.send(Ok(()));
+                    println!("Responded and result:{:?}", reply);
+                }
                 HandlerMsg::Remove { id } => registry.remove(&id),
             }
         } else {
