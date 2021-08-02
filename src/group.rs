@@ -1,7 +1,5 @@
 use crate::peer::Peer;
 use crate::registry::Registry;
-
-//use std::error::Error;
 use std::error::Error;
 use std::hash::Hash;
 use tokio::sync::mpsc;
@@ -14,8 +12,8 @@ type HandlerResult = Result<(), Box<dyn Error + Send>>;
 #[derive(Debug)]
 enum HandlerMsg<I, M>
 where
-    I: Hash + Eq + std::fmt::Debug,
-    M: Peer + std::fmt::Debug,
+    I: Send + Hash + Eq + std::fmt::Debug,
+    M: Send + Peer + std::fmt::Debug,
 {
     Add {
         reply_sender: oneshot::Sender<HandlerResult>,
@@ -31,8 +29,10 @@ where
 
 pub struct Group<I, M>
 where
-    I: Clone + Send + Hash + Eq + std::fmt::Debug,
-    M: Clone + Send + Peer + std::fmt::Debug,
+    I: Send + Eq + Hash + std::fmt::Debug,
+    M: Send + Peer + std::fmt::Debug,
+    //I: Clone + Send + Hash + Eq + std::fmt::Debug,
+    //M: Clone + Send + Peer + std::fmt::Debug,
 {
     handler: JoinHandle<()>,
     handler_sender: mpsc::Sender<HandlerMsg<I, M>>,
@@ -41,6 +41,8 @@ where
 
 impl<I, M> Group<I, M>
 where
+    //I: Clone + Send + Hash + Eq + std::fmt::Debug,
+    //M: Send + Peer + std::fmt::Debug,
     I: 'static + Clone + Send + Hash + Eq + std::fmt::Debug,
     M: 'static + Clone + Send + Peer + std::fmt::Debug,
 {
@@ -50,13 +52,17 @@ where
         let (handler_sender, rx) = mpsc::channel(32);
 
         let handler = tokio::spawn(async move {
+            //println!("stuff");
+            //let mut registry: Registry<I, M> = Registry::new(ping_timeout, k);
             handler(rx, ping_timeout, k).await;
         });
 
         let scheduler_tx = handler_sender.clone();
         let scheduler = tokio::spawn(async move {
             loop {
-                // FIXME: perhaps a more sophisticated scheduler is needed here.
+                /*
+                FIXME: perhaps a more sophisticated scheduler is needed here.
+                */
                 scheduler_tx.send(HandlerMsg::PeriodicCheck).await.unwrap();
                 tokio::time::sleep(protocol_period).await;
             }
@@ -70,7 +76,7 @@ where
     }
 
     pub async fn add(&self, id: I, member: M) {
-        let (reply_sender, mut rx) = oneshot::channel::<HandlerResult>();
+        let (reply_sender, rx) = oneshot::channel::<HandlerResult>();
         self.handler_sender
             .send(HandlerMsg::Add {
                 reply_sender,
@@ -86,7 +92,7 @@ where
     }
 
     pub async fn remove(&self, id: I) {
-        let (reply_sender, mut rx) = oneshot::channel::<HandlerResult>();
+        let (reply_sender, rx) = oneshot::channel::<HandlerResult>();
         self.handler_sender
             .send(HandlerMsg::Remove { reply_sender, id })
             .await
@@ -113,10 +119,12 @@ where
     I: 'static + Clone + Send + Hash + Eq + std::fmt::Debug,
     M: 'static + Clone + Send + Peer + std::fmt::Debug,
 {
+    println!("stuff");
     let mut registry: Registry<I, M> = Registry::new(ping_timeout, k);
+
     loop {
         match rx.recv().await {
-            Some(HandlerMsg::PeriodicCheck) => registry.perform_periodic_check(),
+            Some(HandlerMsg::PeriodicCheck) => unsafe { registry.perform_periodic_check() },
             Some(HandlerMsg::Add {
                 reply_sender,
                 id,
