@@ -58,8 +58,12 @@ pub async fn main() {
     g.add(4, Member::new(4, "four", 30)).await;
     g.add(5, Member::new(5, "five", 0)).await;
     g.add(6, Member::new(6, "six", 0)).await;
+    g.add(7, Member::new(7, "seven", 0)).await;
 
     println!("added a few");
+
+    g.remove(7).await;
+    println!("all removed");
 
     //let (i, m) = g.pick_random().unwrap();
     //println!("Hello, world! k:{}, v:{:?}", i, m);

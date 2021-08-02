@@ -18,11 +18,12 @@ where
     M: Peer + std::fmt::Debug,
 {
     Add {
-        reply_channel: oneshot::Sender<HandlerResult>,
+        reply_sender: oneshot::Sender<HandlerResult>,
         id: I,
         member: M,
     },
     Remove {
+        reply_sender: oneshot::Sender<HandlerResult>,
         id: I,
     },
     PeriodicCheck,
@@ -72,12 +73,12 @@ where
         let (reply_sender, mut rx) = oneshot::channel::<HandlerResult>();
         self.handler_sender
             .send(HandlerMsg::Add {
-                reply_channel: reply_sender,
-                id: id,
-                member: member,
+                reply_sender,
+                id,
+                member,
             })
             .await
-            .unwrap();
+            .expect("send add fail");
         match rx.await {
             Ok(v) => println!("got = {:?}", v),
             Err(_) => println!("the sender dropped"),
@@ -85,10 +86,15 @@ where
     }
 
     pub async fn remove(&self, id: I) {
+        let (reply_sender, mut rx) = oneshot::channel::<HandlerResult>();
         self.handler_sender
-            .send(HandlerMsg::Remove { id: id })
+            .send(HandlerMsg::Remove { reply_sender, id })
             .await
-            .unwrap();
+            .expect("send remove fail");
+        match rx.await {
+            Ok(v) => println!("remove === got = {:?}", v),
+            Err(_) => println!("remove === the sender dropped"),
+        }
     }
 
     // FIXME: not sure of these, or touching the handles will ever be needed,
@@ -109,23 +115,28 @@ where
 {
     let mut registry: Registry<I, M> = Registry::new(ping_timeout, k);
     loop {
-        if let Some(msg) = rx.recv().await {
-            match msg {
-                HandlerMsg::PeriodicCheck => registry.perform_periodic_check(),
-                HandlerMsg::Add {
-                    reply_channel,
-                    id,
-                    member,
-                } => {
-                    registry.add(id, member);
-                    let reply = reply_channel.send(Ok(()));
-                    println!("Responded and result:{:?}", reply);
-                }
-                HandlerMsg::Remove { id } => registry.remove(&id),
+        match rx.recv().await {
+            Some(HandlerMsg::PeriodicCheck) => registry.perform_periodic_check(),
+            Some(HandlerMsg::Add {
+                reply_sender,
+                id,
+                member,
+            }) => {
+                registry.add(id, member);
+                reply_sender
+                    .send(Ok(()))
+                    .expect("ERROR: when sending response");
             }
-        } else {
-            println!("stopped");
-            break;
+            Some(HandlerMsg::Remove { reply_sender, id }) => {
+                registry.remove(&id);
+                reply_sender
+                    .send(Ok(()))
+                    .expect("ERROR: when sending response");
+            }
+            _ => {
+                println!("ERROR: handler stopped");
+                break;
+            }
         }
     }
 }
