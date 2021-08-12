@@ -89,14 +89,14 @@ where
         v
     }
 
-    pub unsafe fn perform_periodic_check(&mut self) {
+    pub unsafe fn perform_check(&mut self) {
         // Member Mi (self) selects a random member (Mj) to ping, in every period.
         if let Some(id) = self.pick_random() {
             let id = id.clone();
             let mut removed = self.members.remove(&id).unwrap();
             let mj: &mut M = Arc::get_mut(&mut removed).unwrap();
             let r = self.test_member(mj);
-            println!("{:?} tested {:?}", mj, r);
+            //println!("{:?} tested {:?}", mj, r);
             match r {
                 PingResult::Pong => {
                     self.members.insert(id, removed);
@@ -108,7 +108,7 @@ where
     }
 
     unsafe fn test_member(&mut self, mj: &mut M) -> PingResult {
-        println!("testing {:?}", mj.name());
+        //println!("testing {:?}", mj.name());
         match mj.ping(self.ping_timeout) {
             PingResult::Pong => PingResult::Pong,
             PingResult::Pang => self.try_neighbours(mj),

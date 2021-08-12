@@ -31,8 +31,6 @@ pub struct Group<I, M>
 where
     I: Send + Eq + Hash + std::fmt::Debug,
     M: Send + Peer + std::fmt::Debug,
-    //I: Clone + Send + Hash + Eq + std::fmt::Debug,
-    //M: Clone + Send + Peer + std::fmt::Debug,
 {
     handler: JoinHandle<()>,
     handler_sender: mpsc::Sender<HandlerMsg<I, M>>,
@@ -52,8 +50,6 @@ where
         let (handler_sender, rx) = mpsc::channel(32);
 
         let handler = tokio::spawn(async move {
-            //println!("stuff");
-            //let mut registry: Registry<I, M> = Registry::new(ping_timeout, k);
             handler(rx, ping_timeout, k).await;
         });
 
@@ -86,7 +82,7 @@ where
             .await
             .expect("send add fail");
         match rx.await {
-            Ok(v) => println!("got = {:?}", v),
+            Ok(_v) => (), //println!("got = {:?}", v),
             Err(_) => println!("the sender dropped"),
         }
     }
@@ -98,7 +94,7 @@ where
             .await
             .expect("send remove fail");
         match rx.await {
-            Ok(v) => println!("remove === got = {:?}", v),
+            Ok(_v) => (), //println!("remove === got = {:?}", v),
             Err(_) => println!("remove === the sender dropped"),
         }
     }
@@ -119,12 +115,11 @@ where
     I: 'static + Clone + Send + Hash + Eq + std::fmt::Debug,
     M: 'static + Clone + Send + Peer + std::fmt::Debug,
 {
-    println!("stuff");
     let mut registry: Registry<I, M> = Registry::new(ping_timeout, k);
 
     loop {
         match rx.recv().await {
-            Some(HandlerMsg::PeriodicCheck) => unsafe { registry.perform_periodic_check() },
+            Some(HandlerMsg::PeriodicCheck) => unsafe { registry.perform_check() },
             Some(HandlerMsg::Add {
                 reply_sender,
                 id,

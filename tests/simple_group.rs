@@ -1,5 +1,4 @@
 #[cfg(test)]
-//use crate::test::Member;
 use kswim::group::Group;
 use kswim::peer::Peer;
 use kswim::ping::PingResult;
