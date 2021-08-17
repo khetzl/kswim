@@ -56,7 +56,7 @@ impl Member {
 impl Peer for Member {
     fn ping(&mut self, _timeout: Duration) -> PingResult {
         if let Err(_) = self.send_channel.try_send(ConnectionHandlerMsg::Send {
-            msg: String::from("ping"),
+            msg: String::from("ping\n"),
         }) {
             println!("the receiver dropped");
         }
@@ -124,9 +124,9 @@ async fn listener_worker(addr: SocketAddr) {
 
 async fn handle_socket(mut stream: TcpStream) {
     println!("socket stuff");
-    let mut line = String::new();
     let mut stream = BufReader::new(stream);
     loop {
+        let mut line = String::new();
         println!("waiting to read a line...");
         stream.read_line(&mut line).await.unwrap();
         //let mut buf = [0; 1024];
